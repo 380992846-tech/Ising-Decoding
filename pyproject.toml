@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ising-decoding-colorcode"
+version = "0.1.0"
+description = "Real-time quantum error-correction decoding with NVIDIA Ising Decoders for the triangular color code."
+readme = "README.md"
+requires-python = ">=3.9"
+# NOTE: 填写真实 author 与 license（LICENSE 文件加好后可改为 license = { file = "LICENSE" }）
+authors = [{ name = "TODO" }]
+dependencies = [
+  "numpy>=1.24",
+  # PyTorch——GPU 机器请先装 CUDA 匹配版本（见 README.en.md / README.md 环境一节）
+  "torch>=2.0",
+  "huggingface-hub>=0.20",   # download_models.py：从 HF 拉官方预训练解码器
+  "stim>=1.13",              # 量子纠错电路模拟（生成颜色代码 benchmark 电路）
+  "pymatching>=2.1",         # 行业标准匹配解码器（对比基线）
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "ruff>=0.4",
+  "mypy>=1.8",
+]
+plots = [
+  "matplotlib>=3.7",
+]
+
+[tool.setuptools]
+# scripts-only 仓库，无 Python 包；仅用于声明依赖与元数据
+packages = []
+
+[tool.ruff]
+line-length = 100
+exclude = ["data", "models", "results"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -3,6 +3,8 @@
 > 用 NVIDIA 的 **Ising Decoding**（AI 量子纠错预解码器）做**实时量子纠错**，目标：激活因缺乏快速解码器而被"雪藏"的**三角形颜色代码（Triangular Color Code）**。
 >
 > 从复现官方基准（对比 pyMatching）到硬件集成（延迟预算权衡），再到探索性微调，逐步推进实时量子纠错的工程化。
+>
+> **English version:** see [README.en.md](README.en.md).
 
 ---
 
