@@ -93,14 +93,15 @@
 
 ## 环境与依赖
 
-> 具体安装步骤需参考 [NVIDIA/ising-decoding](https://github.com/NVIDIA/ising-decoding) 官方 README（依赖 CUDA/PyTorch、stim、pyMatching 等）。本项目将在 `docs/` 中记录实际可复现的环境配置。
+> 具体安装步骤需参考 [NVIDIA/ising-decoding](https://github.com/NVIDIA/ising-decoding) 官方 README（依赖 CUDA/PyTorch、stim、pyMatching 等）。**详见 `docs/installation.md`（完整安装清单，含 CUDA 版 torch）**。
 
 ```bash
-# 规划中的关键依赖（以官方仓库为准）
-# - CUDA + PyTorch
+# 关键依赖
+# - CUDA + PyTorch（GPU 机器请装 CUDA 匹配版）
 # - stim（量子电路模拟）
 # - pymatching（对比基线）
-# - NVIDIA ising-decoding（官方 recipes）
+# - NVIDIA ising-decoding（官方 recipes，color_code 电路用它生成）
+export NV_ISING_CODECODE_DIR="$(pwd)/ising-decoding/code"   # 或运行时传 --nvidia-code-dir <repo>/code
 ```
 
 ---

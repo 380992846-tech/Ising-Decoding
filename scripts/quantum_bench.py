@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -52,13 +53,15 @@ DEFAULT_NOISE = 0.01
 # Circuit construction
 # ============================================================
 def build_circuit(code: str, distance: int, rounds: int, noise: float,
-                  circuit_file: str | None = None) -> "stim.Circuit":
+                  circuit_file: str | None = None, *, basis: str = "X",
+                  nvidia_code_dir: str | None = None) -> "stim.Circuit":
     """Build a stabilizer code circuit.
 
     ``code``:
       - ``surface_code``  : rotated memory-Z, via ``stim.Circuit.generated`` (runs out-of-the-box);
-      - ``color_code``    : attempts ``stim.Circuit.generated("color_code:memory_z")``; if stim
-                            does not support it, raise with guidance to supply a circuit;
+      - ``color_code``    : uses NVIDIA's tested triangular color-code memory-circuit
+                            generator (``build_color_memory_circuit`` from NVIDIA/ising-decoding);
+                            requires that repo cloned and its ``code/`` dir importable;
       - ``custom``        : load a ``.stim`` file from ``circuit_file``.
     """
     if stim is None:
@@ -78,26 +81,54 @@ def build_circuit(code: str, distance: int, rounds: int, noise: float,
             after_reset_flip_probability=noise,
         )
     if code == "color_code":
-        try:
-            # Many stim builds do not ship a color-code generator; this is the
-            # target we want, but it may need a manual circuit (NVIDIA repo / .stim file).
-            return stim.Circuit.generated(
-                "color_code:memory_z",
-                distance=distance,
-                rounds=rounds,
-                after_clifford_depolarization=noise,
-                before_round_data_depolarization=noise,
-                before_measure_flip_probability=noise,
-                after_reset_flip_probability=noise,
-            )
-        except Exception as e:  # pragma: no cover
-            raise RuntimeError(
-                "color_code generation via stim.Circuit.generated is not supported "
-                "on this stim version. Provide a triangular color-code circuit: "
-                "clone NVIDIA/ising-decoding for its circuit, or supply a .stim file "
-                "via --circuit-file. Underlying error: %s" % e
-            ) from e
+        return build_color_code_circuit(distance, rounds, noise, basis, nvidia_code_dir)
     raise ValueError(f"unknown code: {code!r} (use surface_code | color_code | custom)")
+
+
+def build_color_code_circuit(distance: int, rounds: int, noise: float, basis: str,
+                             nvidia_code_dir: str | None = None) -> "stim.Circuit":
+    """Build a triangular color-code memory circuit via NVIDIA's tested generator.
+
+    Reuses ``qec.color_code.reference_superdense_noise.build_color_memory_circuit``
+    from ``NVIDIA/ising-decoding`` (Apache-2.0) rather than reimplementing the
+    superdense schedule, so the circuit is the validated one. Returns the
+    ``MemoryCircuit`` object's ``.stim_circuit`` (a ``stim.Circuit``).
+
+    Raises a clear error (never a fabricated circuit) if the NVIDIA repo or its
+    dependencies (stim) are unavailable.
+    """
+    NV_DIR = nvidia_code_dir or os.environ.get("NV_ISING_CODECODE_DIR", "NVIDIA/ising-decoding/code")
+    code_dir = Path(NV_DIR).resolve()
+    if not (code_dir / "qec").is_dir():
+        raise RuntimeError(
+            "NVIDIA color-code module not found. Clone it and pass --nvidia-code-dir "
+            "(or set env NV_ISING_CODECODE_DIR) to <NVIDIA/ising-decoding>/code:  "
+            "git clone https://github.com/NVIDIA/ising-decoding.git"
+        )
+    if str(code_dir) not in sys.path:
+        sys.path.insert(0, str(code_dir))
+    try:
+        from qec.color_code.reference_superdense_noise import build_color_memory_circuit
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError(
+            "Failed to import NVIDIA color-code circuit builder. Ensure `pip install stim` "
+            "and that NVIDIA/ising-decoding's `code/` dir is on the path. Underlying error: %s"
+            % e
+        ) from e
+
+    mc = build_color_memory_circuit(
+        distance=int(distance),
+        n_rounds=int(rounds),
+        basis=str(basis).upper(),
+        p_error=float(noise),
+        noise_model=None,
+        gidney_style_noise=False,
+        noise_model_family="legacy",
+        noise_instruction_semantics="current",
+        schedule="nearest-neighbor",
+        add_boundary_detectors=True,
+    )
+    return mc.stim_circuit
 
 
 # ============================================================
@@ -254,6 +285,10 @@ def main() -> None:
     p.add_argument("--decoder", choices=["ising", "pymatching", "both"], default="pymatching")
     p.add_argument("--code", choices=["surface_code", "color_code", "custom"],
                    default="surface_code", help="code family (default surface_code for reproducibility)")
+    p.add_argument("--basis", choices=["X", "Z"], default="X",
+                   help="memory basis (color_code; surface_code is always memory-Z)")
+    p.add_argument("--nvidia-code-dir", default=None,
+                   help="path to <NVIDIA/ising-decoding>/code (for --code color_code)")
     p.add_argument("--circuit-file", default=None, help="custom .stim file (with --code custom)")
     p.add_argument("--distance", type=int, default=3, help="code distance")
     p.add_argument("--rounds", type=int, default=None, help="number of syndrome rounds (default = distance)")
@@ -274,7 +309,8 @@ def main() -> None:
         raise SystemExit("[missing deps] stim not installed: `pip install stim`.")
 
     rounds = args.rounds or args.distance
-    circuit = build_circuit(args.code, args.distance, rounds, args.noise, args.circuit_file)
+    circuit = build_circuit(args.code, args.distance, rounds, args.noise, args.circuit_file,
+                            basis=args.basis, nvidia_code_dir=args.nvidia_code_dir)
     circuit_name = f"{args.code}_d{args.distance}_r{rounds}_{args.noise}"
 
     decoders = ["pymatching"] if args.decoder == "pymatching" else (["ising"] if args.decoder == "ising" else ["ising", "pymatching"])
